@@ -59,22 +59,4 @@ Get-ChildItem -Filter .mklink.in -Recurse -Path $winfile_root | ForEach-Object -
     "`"$($_.link)`",`"$($_.target)`"" | Out-File -FilePath $mklink_path\.mklink.out -Append
   }
 
-
-
-  # Extract file name and full paths
-  # $mklink_target_file = (Get-Item $mklink_content).name
-  # $mklink_target_path = Split-Path -Parent $mklink_content
-
-  # If the path exists back it up
-  # if (Test-Path -Path $mklink_content) {
-  #   Get-ChildItem `
-  #     -Recurse    `
-  #     -Path $mklink_content | 
-  #     Write-Zip `
-  #       -Quiet `
-  #       -IncludeEmptyDirectories `
-  #       -EntryPathRoot $mklink_target_path `
-  #       -OutputPath $mklink_path\$mklink_target_file$(Get-Date -Format yyyyMMddHHmmss).bak.zip
-  # }
-
 }
