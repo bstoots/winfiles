@@ -2,61 +2,103 @@
 #
 #
 
-# Set the root working dir for scanning and whatnot
-$winfile_root = Get-Location | Split-Path -Parent
+# Define CLI args
+param (
+  # $mode - Which mode to run the bootstrap script in.  Options are:
+  #   * report
+  #   * link
+  #   * backup
+  [string]$mode = "report"
+)
 
-# Find .mklink place-holders
-#foreach ($mklink_holder in Get-ChildItem -Filter *.mklink -Recurse -Path $winfile_root) -- Old school way
-# Faster PS 4.0 only way
-Get-ChildItem -Filter .mklink.in -Recurse -Path $winfile_root | ForEach-Object -process {
-  # Grab the mklink file name and path
-  $mklink_file = $_.name
-  $mklink_path = Split-Path -Parent $_.FullName
-    
-  # Clone .mklink.in to .mklink.out to record local config
-  Out-File -FilePath $mklink_path\.mklink.out
+# Define consts
+Set-Variable MKLINK_DEF -option Constant -value ".mklink.def"
+Set-Variable WINFILE_ROOT -option Constant -value (Join-Path -Path $PSCommandPath -ChildPath ..\.. -Resolve)
 
-  Import-Csv -Header link,target $_.FullName | ForEach-Object -process {
-    # Make sure we have valid paths in here
-    do {
-      # This path must exist, otherwise what are we trying to link to?
-      if (!(Test-Path -Path $_.link)) {
-        Write-Error "Link path: $($_.link), does not exist."
-        $_.link = Read-Host "YO DAWG"
-      }
-      # This path may or may not exist.  If it does it will need backed up and removed
-      # to make room for our incoming symlink
-      if (!(Test-Path -IsValid -Path $_.target)) {
-        Write-Error "Target path: $($_.target), does not exist."
-        $_.target = Read-Host "YO DAWG"
-      }
-    # Don't let go until we get something legit or the user rage quits
-    } Until ((Test-Path -Path $_.link) -and (Test-Path -IsValid -Path $_.target))
-
-    # Normalize paths relative to wherever the loaded in.mklink file is located
-    $_.link = Resolve-Path (Join-Path -Path $mklink_path -ChildPath $_.link)
-    #$_.target = Resolve-Path $_.target
-
-    # Should be good to roll now.  If path we're creating the link to already exists back it up
-    if (Test-Path -Path $_.target) {
-      # If the path exists back it up
-      Get-ChildItem `
-        -Recurse    `
-        -Path $_.target | 
-        Write-Zip `
-          -Quiet `
-          -IncludeEmptyDirectories `
-          -EntryPathRoot $(Split-Path -Parent $_.target) `
-          -OutputPath $mklink_path\$((Get-Item $_.target).name)$(Get-Date -Format yyyyMMddHHmmss).bak.zip
-      # All backed up trash the existing dir
-      Remove-Item -Force -Path $_.target
-    }
-
-    # Symlink it up!
-    New-Symlink -TargetPath $_.link -Path $_.target
-
-    # Looks good, now write an out.mklink for future reference / sanity
-    "`"$($_.link)`",`"$($_.target)`"" | Out-File -FilePath $mklink_path\.mklink.out -Append
-  }
-
+<# 
+  Search given directory recursively for .mklink.def files
+#>
+Function Get-MklinkDefDir($dir) {
+  Get-ChildItem -Filter $MKLINK_DEF -Recurse -Path $dir -File
 }
+
+<# 
+#>
+Function Get-MklinkDefCsvRow($csv) {
+  Import-Csv -Header link,target $csv
+}
+
+<# 
+#>
+Function Expand-Path ([string]$path, [string]$working_dir = ".") {
+  # If path is relative expand it relative to the working directory
+  if ($path.StartsWith(".")) {
+    # If working_dir is relative expand it
+    if ($working_dir.StartsWith(".")) {
+      $working_dir = [System.IO.Path]::GetFullPath([System.Environment]::ExpandEnvironmentVariables($working_dir).toString())
+    }
+    else {
+      $working_dir = [System.Environment]::ExpandEnvironmentVariables($working_dir).toString()
+    }
+    # 
+    $expanded_path = [System.IO.Path]::GetFullPath(
+      (Join-Path (
+        Join-Path ($working_dir) .) ([System.Environment]::ExpandEnvironmentVariables($path).toString())
+      )
+    )
+  }
+  # If path is not relative just expand the env vars
+  else {
+    $expanded_path = [System.Environment]::ExpandEnvironmentVariables($path).toString()
+  }
+  # Return expanded path
+  $expanded_path
+}
+
+<# 
+#>
+Function Backup-Path ([string]$path, [string]$archive) {
+  if (!(Test-Path -Path $archive)) {
+    $null | Write-Zip -Quiet -OutputPath $archive
+  }
+ Get-ChildItem -Recurse $path | Write-Zip -Quiet -IncludeEmptyDirectories -EntryPathRoot $(Split-Path -Parent $path) -OutputPath $archive
+}
+
+<#
+#>
+function Is-Symlink([string]$path) {
+  $file = Get-Item $path -Force -ea 0
+  [bool]($file.Attributes -band [IO.FileAttributes]::ReparsePoint)
+}
+
+<# 
+  Main
+#>
+Get-MklinkDefDir $WINFILE_ROOT | ForEach-Object -process {
+  $working_dir = $_.Directory
+  # Might be worthwhile to move this to its own backup dir or something.  we'll see.
+  $archive = "$working_dir\$(Split-Path -Leaf $working_dir)$(Get-Date -Format yyyyMMddHHmmss).mklink.bak.zip"
+  Get-MklinkDefCsvRow $_.FullName | ForEach-Object -process {
+    $link = Expand-Path $_.link $working_dir 
+    $target = Expand-Path $_.target $working_dir 
+    # Sanity check link path before we start
+    if (!(Test-Path -Path $link)) {
+      Write-Error "Link path doesn't exist! $link.  Check your $MKLINK_DEF"
+      exit 1
+    }
+    # Sanity check target path as well, if it's already symlink don't try to remove it
+    if (Test-Path -Path $target) {
+      # If this file/path exists we'll need to back it up
+      if (Is-Symlink $target) {
+        Remove-ReparsePoint -Confirm:$false -Path $target
+      }
+      else {
+        Backup-Path $target $archive
+        Remove-Item -Force -Recurse -Confirm:$false -Path $target
+      }
+    }
+    # Symlink it up!
+    New-Symlink -TargetPath $link -Path $target
+  }
+}
+return $true
