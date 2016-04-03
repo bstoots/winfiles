@@ -1,6 +1,14 @@
-#
-#
-#
+<#
+.Synopsis
+   Like dotfiles but for Windows!
+.Link
+  https://github.com/bstoots/winfiles
+.Description
+  Configures Windows machines for development by setting up registry keys, creating symlinks,
+  installing Powershell modules, and more.
+.Example
+   .\bootstrap.ps1
+#>
 
 param (
   [switch]$Force = $false,
@@ -49,6 +57,7 @@ Function Test-PathIsSymlink([string]$path) {
 # Get NuGet so we can use Powershell Gallery to grab additional modules $$$$$$$
 if (!(Get-PackageProvider -ListAvailable -Name "NuGet" -ErrorAction SilentlyContinue)) {
   Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction Stop
+  Set-PSRepository -Name PSGallery -Force -InstallationPolicy Trusted
 }
 if (!(Get-Module -ListAvailable -Name "Pscx")) {
   Install-Module -Name Pscx -Force -Scope CurrentUser -ErrorAction Stop
