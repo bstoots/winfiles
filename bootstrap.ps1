@@ -12,8 +12,9 @@ $statusFailure  = "-"
 $statusForced   = "!"
 $statusNoChange = "@"
 
-$labelRegistry = "registry"
-$labelSymlink  = "symlink"
+Set-Variable sectionRegistry -option Constant -value "registry"
+Set-Variable sectionSymlink -option Constant -value "symlink"
+Set-Variable sectionPsModule -option Constant -value "psmodule"
 
 $maxBackups = 10
 
@@ -47,16 +48,16 @@ Function Test-PathIsSymlink([string]$path) {
 
 # Get NuGet so we can use Powershell Gallery to grab additional modules $$$$$$$
 if (!(Get-PackageProvider -ListAvailable -Name "NuGet" -ErrorAction SilentlyContinue)) {
-  Install-PackageProvider -Name NuGet -Force -ErrorAction Stop
+  Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction Stop
 }
 if (!(Get-Module -ListAvailable -Name "Pscx")) {
-  Install-Module -Name Pscx -Force -ErrorAction Stop
+  Install-Module -Name Pscx -Force -Scope CurrentUser -ErrorAction Stop
 }
 if (!(Get-Module -ListAvailable -Name "PSConfig")) {
-  Install-Module -Name PSConfig -Force -ErrorAction Stop
+  Install-Module -Name PSConfig -Force -Scope CurrentUser -ErrorAction Stop
 }
 if (!(Get-Module -ListAvailable -Name "Carbon")) {
-  Install-Module -Name Carbon -Force -ErrorAction Stop
+  Install-Module -Name Carbon -Force -Scope CurrentUser -ErrorAction Stop
 }
 
 # Initialize configs
@@ -64,12 +65,10 @@ Clear-ConfigurationSource
 Add-FileConfigurationSource -Path ".\config.json" -Format "Json"
 
 # Check and install registry keys
-$registry = Get-ConfigurationItem -Key "registry"
+$registry = Get-ConfigurationItem -Key $sectionRegistry
 if ($registry -ne $null) {
   # A single object gets squashed, re-expand it to an array
-  if (!$registry.getType().IsArray) {
-    $registry = @($registry)
-  }
+  $registry = @($registry)
   foreach ($reg in $registry) {
     $oldVal = $null
     if (Test-RegistryKeyValue -Path $reg.path -Name $reg.key) {
@@ -78,44 +77,42 @@ if ($registry -ne $null) {
         $oldVal = Get-RegistryKeyValue -Path $reg.path -Name $reg.key
         if ($Force) {
           Set-RegistryKeyValue -Path $reg.path -Name $reg.key -String $reg.val
-          formatLine $statusForced $labelRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
+          formatLine $statusForced $sectionRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
         } else {
-          formatLine $statusFailure $labelRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
+          formatLine $statusFailure $sectionRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
         }
       }
       # Else key is already set to incoming value, no need to set again
       else {
-        formatLine $statusNoChange $labelRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
+        formatLine $statusNoChange $sectionRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
       }
     }
     # Key does not exist, create and set it
     else {
       Set-RegistryKeyValue -Path $reg.path -Name $reg.key -String $reg.val
-      formatLine $statusSuccess $labelRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
+      formatLine $statusSuccess $sectionRegistry ("$($reg.path)\$($reg.key)") $oldVal $reg.val
     }
   }
 }
 
 # Configure symlinks
-$symlink = Get-ConfigurationItem -Key "symlink"
+$symlink = Get-ConfigurationItem -Key $sectionSymlink
 if ($symlink -ne $null) {
   # A single object gets squashed, re-expand it to an array
-  if (!$symlink.getType().IsArray) {
-    $symlink = @($symlink)
-  }
+  $symlink = @($symlink)
   foreach ($sym in $symlink) {
     $oldVal = $null
     $expandedTarget = $ExecutionContext.InvokeCommand.ExpandString($sym.target)
     $expandedLink = $ExecutionContext.InvokeCommand.ExpandString($sym.link)
     # Make sure TargetPath is set otherwise there's no point in continuing
     if (!(Test-Path -Path $expandedTarget)) {
-      formatLine $statusFailure $labelSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedTarget
+      formatLine $statusFailure $sectionSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedTarget
       continue
     }
     
     # If $expandedLink is already a symlink lets just assume it's one of ours
     if (Test-PathIsSymlink $expandedLink) {
-      formatLine $statusNoChange $labelSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
+      formatLine $statusNoChange $sectionSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
       continue
     }
 
@@ -133,22 +130,48 @@ if ($symlink -ne $null) {
         #  Make sure the file is no longer present then link it up
         if (!(Test-Path -Path $expandedLink)) {
           New-Symlink -TargetPath $expandedTarget -LiteralPath $expandedLink | Out-Null
-          formatLine $statusForced $labelSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
+          formatLine $statusForced $sectionSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
         } else {
           Write-Error "Too many backups spoil the broth"
-          formatLine $statusFailure $labelSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
+          formatLine $statusFailure $sectionSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
         }
       }
       # Without -Force just report failure
       else {
-        formatLine $statusFailure $labelSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedTarget
+        formatLine $statusFailure $sectionSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedTarget
       }
     }
     # Nothing at link path, go ahead and link it up
     else {
       New-Symlink -TargetPath $expandedTarget -LiteralPath $expandedLink | Out-Null
-      formatLine $statusSuccess $labelSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
+      formatLine $statusSuccess $sectionSymlink ("$($sym.link) -> $($sym.target)") $oldVal $expandedLink
     }
   }
 }
 
+# Install additional Powershell modules
+$psmodule = Get-ConfigurationItem -Key $sectionPsModule
+if ($psmodule -ne $null) {
+  # A single object gets squashed, re-expand it to an array
+  $psmodule = @($psmodule)
+  foreach ($module in $psmodule) {
+    # See if this module is already installed
+    $oldMod = Get-Module -ListAvailable -Name $module.name -ErrorAction SilentlyContinue
+    if ($oldMod) {
+      $oldModVersion = [string]$oldMod.version
+      # For now just continue if the module is already installed, later we could do something
+      # more interesting in here like version checking + upgrade
+      formatLine $statusNoChange $sectionPsModule $module.name $oldModVersion $newModVersion
+      continue
+    }
+    Try {
+      $newMod = Install-Module -Name $module.name -Scope CurrentUser
+      if ($newMod) {
+        $newModVersion = [string]$newMod.version
+      }
+      formatLine $statusSuccess $sectionPsModule $module.name $oldModVersion $newModVersion
+    } Catch {
+      formatLine $statusFailure $sectionPsModule $module.name $oldModVersion $newModVersion
+    }
+  }
+}

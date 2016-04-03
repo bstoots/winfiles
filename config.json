@@ -20,5 +20,8 @@
       "target" : ".\\conf\\conemu\\ConEmu.xml",
       "link": "$env:USERPROFILE\\AppData\\Roaming\\ConEmu.xml"
     }
+  ],
+  "psmodule": [
+    {"name": "posh-git"}
   ]
 }
