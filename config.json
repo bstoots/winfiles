@@ -1,0 +1,24 @@
+{
+  "registry": [
+    {
+      "type": "String",
+      "path": "HKCU:\\Software\\Microsoft\\Command Processor",
+      "key" : "AutoRun",
+      "val" : "%USERPROFILE%\\.cmdrc.bat"
+    }
+  ],
+  "symlink": [
+    {
+      "target" : ".\\.cmdrc.bat",
+      "link": "$env:USERPROFILE\\.cmdrc.bat"
+    },
+    {
+      "target" : ".\\.gitignore_global",
+      "link": "$env:USERPROFILE\\.gitignore_global"
+    },
+    {
+      "target" : ".\\conf\\conemu\\ConEmu.xml",
+      "link": "$env:USERPROFILE\\AppData\\Roaming\\ConEmu.xml"
+    }
+  ]
+}
