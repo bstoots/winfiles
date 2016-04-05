@@ -23,5 +23,8 @@
   ],
   "psmodule": [
     {"name": "posh-git"}
+  ],
+  "path": [
+    {"value": "$env:USERPROFILE\\.bin"}
   ]
 }

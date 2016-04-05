@@ -23,6 +23,7 @@ $statusNoChange = "@"
 Set-Variable sectionRegistry -option Constant -value "registry"
 Set-Variable sectionSymlink -option Constant -value "symlink"
 Set-Variable sectionPsModule -option Constant -value "psmodule"
+Set-Variable sectionPath -option Constant -value "path"
 
 $maxBackups = 10
 
@@ -57,7 +58,7 @@ Function Test-PathIsSymlink([string]$path) {
 # Get NuGet so we can use Powershell Gallery to grab additional modules $$$$$$$
 if (!(Get-PackageProvider -ListAvailable -Name "NuGet" -ErrorAction SilentlyContinue)) {
   Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction Stop
-  Set-PSRepository -Name PSGallery -Force -InstallationPolicy Trusted
+  Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 }
 if (!(Get-Module -ListAvailable -Name "Pscx")) {
   Install-Module -Name Pscx -Force -Scope CurrentUser -ErrorAction Stop
@@ -181,6 +182,32 @@ if ($psmodule -ne $null) {
       formatLine $statusSuccess $sectionPsModule $module.name $oldModVersion $newModVersion
     } Catch {
       formatLine $statusFailure $sectionPsModule $module.name $oldModVersion $newModVersion
+    }
+  }
+}
+
+# Install additional Powershell modules
+$paths = Get-ConfigurationItem -Key $sectionPath
+if ($paths -ne $null) {
+  # A single object gets squashed, re-expand it to an array
+  $paths = @($paths)
+  foreach ($path in $paths) {
+    # Snag existing path
+    $oldPath = [environment]::GetEnvironmentVariable("Path", "User")
+    $escapedPath = [Regex]::Escape($ExecutionContext.InvokeCommand.ExpandString($path.value))
+    if ($oldPath -notmatch ";??$escapedPath;") {
+      if ($oldPath -ne "" -and $oldPath -ne $null -and $oldPath -match ";$") {
+        $newPath = "$($oldPath);"
+      } else {
+        $newPath = $oldPath
+      }
+      $newPath += "$($path.value);"
+      Set-EnvironmentVariable -Name 'Path' -Value $newPath -ForUser
+      formatLine $statusSuccess $sectionPath $path.value $oldPath $newPath
+    }
+    # Otherwise the path value already exists
+    else {
+      formatLine $statusNoChange $sectionPath $path.value $oldPath $newPath
     }
   }
 }
