@@ -202,12 +202,12 @@ if ($paths -ne $null) {
         $newPath = $oldPath
       }
       $newPath += "$($path.value);"
-      Set-EnvironmentVariable -Name 'Path' -Value $newPath -ForUser
-      formatLine $statusSuccess $sectionPath $path.value $oldPath $newPath
+      # Set-EnvironmentVariable -Name 'Path' -Value $newPath -ForUser
+      # formatLine $statusSuccess $sectionPath $path.value $oldPath $newPath
     }
     # Otherwise the path value already exists
     else {
-      formatLine $statusNoChange $sectionPath $path.value $oldPath $newPath
+      # formatLine $statusNoChange $sectionPath $path.value $oldPath $newPath
     }
   }
 }
