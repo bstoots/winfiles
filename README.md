@@ -1,3 +1,5 @@
+# THIS README IS OUT OF DATE!  UPDATED VERSION IN THE WORKS.
+
 # winfiles
 
 Like dotfiles, but for Windows!
