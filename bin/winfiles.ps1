@@ -20,6 +20,7 @@ Set-Variable WINFILES_BIN     -Option ReadOnly -Value "$WINFILES_ROOT\bin"
 Set-Variable WINFILES_CACHES  -Option ReadOnly -Value "$WINFILES_ROOT\caches"
 Set-Variable WINFILES_CONF    -Option ReadOnly -Value "$WINFILES_ROOT\conf"
 Set-Variable WINFILES_COPY    -Option ReadOnly -Value "$WINFILES_ROOT\copy"
+Set-Variable WINFILES_INIT    -Option ReadOnly -Value "$WINFILES_ROOT\init"
 Set-Variable WINFILES_LINK    -Option ReadOnly -Value "$WINFILES_ROOT\link"
 Set-Variable WINFILES_SOURCE  -Option ReadOnly -Value "$WINFILES_ROOT\source"
 Set-Variable WINFILES_TEST    -Option ReadOnly -Value "$WINFILES_ROOT\test"
@@ -123,3 +124,28 @@ walk $WINFILES_LINK {
   }
 }
 
+# Init using PSBabushka defs
+# PSBabushka isn't available from PSGallery right now so just use a local copy from vendor/
+if (Get-Module -ListAvailable -Name "PSBabushka") {
+  Import-Module "$WINFILES_VENDOR\github\PSBabushka\PSBabushka"
+}
+else {
+  Import-Module "$WINFILES_VENDOR\github\PSBabushka\PSBabushka"
+}
+
+# Walk over files to be linked
+walk "$WINFILES_INIT\PSBabushkaInvokes" {
+  param(
+    [string] $srcPath,
+    [string] $dstPath,
+    [string] $pathType
+  )
+  # Continue on to next iteration if pathType is a directory
+  if ($pathType -eq "Container") {
+    return
+  }
+  
+  # Invoke the corresponding PSBabushka assertion from $WINFILES_INIT\PSBabushkaDeps based on file name
+  # Not all Deps need be called explicitly, some of them may be transitive dependencies resolved by PSBabushka.
+  Invoke-PSBabushka (Split-Path $srcPath -leaf) "$WINFILES_INIT"
+}
