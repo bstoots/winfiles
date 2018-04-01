@@ -1,0 +1,6 @@
+[submodule "vendor/github/dracula/conemu"]
+	path = vendor/github/dracula/conemu
+	url = https://github.com/dracula/conemu.git
+[submodule "vendor/github/bstoots/batfiles"]
+	path = vendor/github/bstoots/batfiles
+	url = https://github.com/bstoots/batfiles.git
